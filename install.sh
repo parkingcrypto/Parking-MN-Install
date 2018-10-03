@@ -6,7 +6,7 @@ CONFIGFOLDER='/root/.parkingcore'
 COIN_DAEMON='parkingd'
 COIN_CLI='parking-cli'
 COIN_PATH='/usr/local/bin/'
-COIN_TGZ='(curl -s https://api.github.com/repos/parkingcrypto/parking/releases/latest | grep browser_download_url | grep -e "parkingd" | cut -d '"' -f 4)'
+COIN_TGZ='https://github.com/parkingcrypto/parking/releases/download/1.1.0/parkingd.zip'
 COIN_ZIP=$(echo $COIN_TGZ | awk -F'/' '{print $NF}')
 COIN_NAME='parking'
 COIN_EXPLORER='https://explorer.parkingcrypto.org/'
@@ -295,4 +295,3 @@ checks
 prepare_system
 download_node
 setup_node
-
