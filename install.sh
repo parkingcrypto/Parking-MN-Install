@@ -4,7 +4,7 @@ CONFIG_FILE='parking.conf'
 CONFIGFOLDER='/root/..parkingcore'
 COIN_DAEMON='/usr/local/bin/parkingd'
 COIN_CLI='/usr/local/bin/parkingd-cli'
-COIN_REPO=''
+COIN_REPO='https://github.com/parkingcrypto/parking/releases/download/v1.1.0.1/parkingcore-1.1.0-linux.tar.gz'
 COIN_NAME='parking'
 COIN_EXPLORER='https://explorer.parkingcrypto.org/'
 COIN_PORT=47777
@@ -49,7 +49,7 @@ function compile_node() {
   tar xvzf $COIN_ZIP --strip=2 ${COIN_DIR}/bin/${COIN_NAME,,}d ${COIN_DIR}/bin/${COIN_NAME,,}-cli>/dev/null 2>&1
   compile_error
   rm -f $COIN_ZIP >/dev/null 2>&1
-  cp logiscoin* /usr/local/bin >/dev/null 2>&1
+  cp parking* /usr/local/bin >/dev/null 2>&1
   compile_error
   strip $COIN_DAEMON $COIN_CLI
   cd - >/dev/null 2>&1
