@@ -1,57 +1,69 @@
 #!/bin/bash
 
+TMP_FOLDER=$(mktemp -d)
 CONFIG_FILE='parking.conf'
 CONFIGFOLDER='/root/.parkingcore'
-COIN_DAEMON='/usr/local/bin/parkingd'
-COIN_CLI='/usr/local/bin/parking-cli'
-COIN_REPO='https://github.com/parkingcrypto/parking/releases/download/v1.1.0.1/parkingcore-1.1.0-linux.tar.gz'
+COIN_DAEMON='parkingd'
+COIN_CLI='parking-cli'
+COIN_PATH='/usr/local/bin/'
+COIN_TGZ='https://github.com/parkingcrypto/parking/releases/download/v1.1.0.1/parkingcore-1.1.0-linux.tar.gz'
+SENTINEL_REPO='https://github.com/hexter2018/sentinel.git'
+COIN_ZIP=$(echo $COIN_TGZ | awk -F'/' '{print $NF}')
 COIN_NAME='parking'
 COIN_EXPLORER='https://explorer.parkingcrypto.org/'
 COIN_PORT=47777
+RPC_PORT=47774
 
 NODEIP=$(curl -s4 icanhazip.com)
 
+BLUE="\033[0;34m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m" 
+PURPLE="\033[0;35m"
 RED='\033[0;31m'
-GREEN='\033[0;32m'
+GREEN="\033[0;32m"
 NC='\033[0m'
+MAG='\e[1;35m'
 
-progressfilt () {
-  local flag=false c count cr=$'\r' nl=$'\n'
-  while IFS='' read -d '' -rn 1 c
-  do
-    if $flag
-    then
-      printf '%c' "$c"
-    else
-      if [[ $c != $cr && $c != $nl ]]
-      then
-        count=0
-      else
-        ((count++))
-        if ((count > 1))
-        then
-          flag=true
-        fi
-      fi
-    fi
-  done
+purgeOldInstallation() {
+    echo -e "${GREEN}Searching and removing old $COIN_NAME files and configurations${NC}"
+    #kill wallet daemon
+	sudo killall $COIN_DAEMON > /dev/null 2>&1
+    #remove old ufw port allow
+    sudo ufw delete allow $COIN_PORT/tcp > /dev/null 2>&1
+    #remove old files
+    sudo rm $COIN_CLI $COIN_DAEMON > /dev/null 2>&1
+    sudo rm -rf ~/.$COIN_NAME > /dev/null 2>&1
+    #remove binaries and $COIN_NAME utilities
+    cd /usr/local/bin && sudo rm $COIN_CLI $COIN_DAEMON > /dev/null 2>&1 && cd
+    echo -e "${GREEN}* Done${NONE}";
 }
 
-function compile_node() {
-  echo -e "Prepare to download $COIN_NAME"
-  TMP_FOLDER=$(mktemp -d)
-  cd $TMP_FOLDER
-  wget --progress=bar:force $COIN_REPO 2>&1 | progressfilt
+function install_sentinel() {
+  echo -e "${GREEN}Installing sentinel.${NC}"
+  apt-get -y install python-virtualenv virtualenv >/dev/null 2>&1
+  git clone $SENTINEL_REPO $CONFIGFOLDER/sentinel >/dev/null 2>&1
+  cd $CONFIGFOLDER/sentinel
+  virtualenv ./venv >/dev/null 2>&1
+  ./venv/bin/pip install -r requirements.txt >/dev/null 2>&1
+  echo  "* * * * * cd $CONFIGFOLDER/sentinel && ./venv/bin/python bin/sentinel.py >> $CONFIGFOLDER/sentinel.log 2>&1" > $CONFIGFOLDER/$COIN_NAME.cron
+  crontab $CONFIGFOLDER/$COIN_NAME.cron
+  rm $CONFIGFOLDER/$COIN_NAME.cron >/dev/null 2>&1
+}
+
+function download_node() {
+  echo -e "${GREEN}Downloading and Installing VPS $COIN_NAME Daemon${NC}"
+  cd $TMP_FOLDER >/dev/null 2>&1
+  wget -q $COIN_TGZ
   compile_error
-  COIN_ZIP=$(echo $COIN_REPO | awk -F'/' '{print $NF}')
   tar xvzf $COIN_ZIP >/dev/null 2>&1
   compile_error
-  rm -f $COIN_ZIP >/dev/null 2>&1
   cd parkingcore-1.1.0-linux
-  cp parking* /usr/local/bin >/dev/null 2>&1
-  compile_error
-  strip $COIN_DAEMON $COIN_CLI
-  cd - >/dev/null 2>&1
+  chmod +x $COIN_DAEMON
+  chmod +x $COIN_CLI
+  cp $COIN_DAEMON $COIN_PATH
+  cp $COIN_CLI $COIN_PATH
+  cd ~ >/dev/null 2>&1
   rm -rf $TMP_FOLDER >/dev/null 2>&1
   clear
 }
@@ -69,8 +81,8 @@ Group=root
 Type=forking
 #PIDFile=$CONFIGFOLDER/$COIN_NAME.pid
 
-ExecStart=$COIN_DAEMON -daemon -conf=$CONFIGFOLDER/$CONFIG_FILE -datadir=$CONFIGFOLDER
-ExecStop=-$COIN_CLI -conf=$CONFIGFOLDER/$CONFIG_FILE -datadir=$CONFIGFOLDER stop
+ExecStart=$COIN_PATH$COIN_DAEMON -daemon -conf=$CONFIGFOLDER/$CONFIG_FILE -datadir=$CONFIGFOLDER
+ExecStop=-$COIN_PATH$COIN_CLI -conf=$CONFIGFOLDER/$CONFIG_FILE -datadir=$CONFIGFOLDER stop
 
 Restart=always
 PrivateTmp=true
@@ -97,48 +109,6 @@ EOF
   fi
 }
 
-function configure_startup() {
-  cat << EOF > /etc/init.d/$COIN_NAME
-#! /bin/bash
-### BEGIN INIT INFO
-# Provides: $COIN_NAME
-# Required-Start: $remote_fs $syslog
-# Required-Stop: $remote_fs $syslog
-# Default-Start: 2 3 4 5
-# Default-Stop: 0 1 6
-# Short-Description: $COIN_NAME
-# Description: This file starts and stops $COIN_NAME MN server
-#
-### END INIT INFO
-
-case "\$1" in
- start)
-   $COIN_DAEMON -daemon
-   sleep 5
-   ;;
- stop)
-   $COIN_CLI stop
-   ;;
- restart)
-   $COIN_CLI stop
-   sleep 10
-   $COIN_DAEMON -daemon
-   ;;
- *)
-   echo "Usage: $COIN_NAME {start|stop|restart}" >&2
-   exit 3
-   ;;
-esac
-EOF
-chmod +x /etc/init.d/$COIN_NAME >/dev/null 2>&1
-update-rc.d $COIN_NAME defaults >/dev/null 2>&1
-/etc/init.d/$COIN_NAME start >/dev/null 2>&1
-if [ "$?" -gt "0" ]; then
- sleep 5
- /etc/init.d/$COIN_NAME start >/dev/null 2>&1
-fi
-}
-
 
 function create_config() {
   mkdir $CONFIGFOLDER >/dev/null 2>&1
@@ -147,32 +117,33 @@ function create_config() {
   cat << EOF > $CONFIGFOLDER/$CONFIG_FILE
 rpcuser=$RPCUSER
 rpcpassword=$RPCPASSWORD
+rpcport=$RPC_PORT
 rpcallowip=127.0.0.1
+port=$COIN_PORT
 listen=1
 server=1
 daemon=1
-port=$COIN_PORT
 EOF
 }
 
 function create_key() {
-  echo -e "Enter your ${RED}$COIN_NAME Masternode Private Key${NC}.\nLeave it blank to generate a new ${RED}$COIN_NAME Masternode Private Key${NC} for you:"
+  echo -e "${YELLOW}Enter your ${RED}$COIN_NAME Masternode GEN Key${NC}. Or Press enter generate New Genkey"
   read -e COINKEY
   if [[ -z "$COINKEY" ]]; then
-  $COIN_DAEMON -daemon
+  $COIN_PATH$COIN_DAEMON -daemon
   sleep 30
   if [ -z "$(ps axo cmd:100 | grep $COIN_DAEMON)" ]; then
    echo -e "${RED}$COIN_NAME server couldn not start. Check /var/log/syslog for errors.{$NC}"
    exit 1
   fi
-  COINKEY=$($COIN_CLI masternode genkey)
+  COINKEY=$($COIN_PATH$COIN_CLI masternode genkey)
   if [ "$?" -gt "0" ];
     then
-    echo -e "${RED}Wallet not fully loaded. Let us wait and try again to generate the Private Key${NC}"
+    echo -e "${RED}Wallet not fully loaded. Let us wait and try again to generate the GEN Key${NC}"
     sleep 30
-    COINKEY=$($COIN_CLI masternode genkey)
+    COINKEY=$($COIN_PATH$COIN_CLI masternode genkey)
   fi
-  $COIN_CLI stop
+  $COIN_PATH$COIN_CLI stop
 fi
 clear
 }
@@ -180,22 +151,27 @@ clear
 function update_config() {
   sed -i 's/daemon=1/daemon=0/' $CONFIGFOLDER/$CONFIG_FILE
   cat << EOF >> $CONFIGFOLDER/$CONFIG_FILE
-logintimestamps=1
-maxconnections=64
-#bind=$NODEIP
+maxconnections=256
+bind=$NODEIP
 masternode=1
-externalip=$NODEIP:$COIN_PORT
+masternodeaddr=$NODEIP:$COIN_PORT
 masternodeprivkey=$COINKEY
+
+#ADDNODES
+
 EOF
 }
 
+
 function enable_firewall() {
   echo -e "Installing and setting up firewall to allow ingress on port ${GREEN}$COIN_PORT${NC}"
-  ufw allow ssh >/dev/null 2>&1
-  ufw allow $COIN_PORT >/dev/null 2>&1
+  ufw allow $COIN_PORT/tcp comment "$COIN_NAME MN port" >/dev/null
+  ufw allow ssh comment "SSH" >/dev/null 2>&1
+  ufw limit ssh/tcp >/dev/null 2>&1
   ufw default allow outgoing >/dev/null 2>&1
   echo "y" | ufw enable >/dev/null 2>&1
 }
+
 
 function get_ip() {
   declare -a NODE_IPS
@@ -220,6 +196,7 @@ function get_ip() {
   fi
 }
 
+
 function compile_error() {
 if [ "$?" -gt "0" ];
  then
@@ -228,37 +205,29 @@ if [ "$?" -gt "0" ];
 fi
 }
 
-function detect_ubuntu() {
- if [[ $(lsb_release -d) == *18.04* ]]; then
-   UBUNTU_VERSION=18
- elif [[ $(lsb_release -d) == *16.04* ]]; then
-   UBUNTU_VERSION=16
- elif [[ $(lsb_release -d) == *14.04* ]]; then
-   UBUNTU_VERSION=14
-else
-   echo -e "${RED}You are not running Ubuntu 14.04, 16.04 or 18.04 Installation is cancelled.${NC}"
-   exit 1
-fi
-}
 
 function checks() {
- detect_ubuntu 
+if [[ $(lsb_release -d) != *16.04* ]]; then
+  echo -e "${RED}You are not running Ubuntu 16.04. Installation is cancelled.${NC}"
+  exit 1
+fi
+
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}$0 must be run as root.${NC}"
    exit 1
 fi
 
 if [ -n "$(pidof $COIN_DAEMON)" ] || [ -e "$COIN_DAEMOM" ] ; then
-  echo -e "${RED}$COIN_NAME is already installed.${NC}"
+  echo -e "${RED}$COIN_NAME is already installed.${NC} Please Run again.."
   exit 1
 fi
 }
 
 function prepare_system() {
-echo -e "Prepare the system to install ${GREEN}$COIN_NAME${NC} master node."
+echo -e "Preparing the VPS to setup. ${CYAN}$COIN_NAME${NC} ${RED}Masternode${NC}"
 apt-get update >/dev/null 2>&1
-apt-get install -y wget curl ufw binutils >/dev/null 2>&1
-apt install -y software-properties-common >/dev/null 2>&1
+DEBIAN_FRONTEND=noninteractive apt-get update > /dev/null 2>&1
+DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -y -qq upgrade >/dev/null 2>&1
 apt install -y software-properties-common >/dev/null 2>&1
 echo -e "${PURPLE}Adding bitcoin PPA repository"
 apt-add-repository -y ppa:bitcoin/bitcoin >/dev/null 2>&1
@@ -286,27 +255,23 @@ clear
 
 function important_information() {
  echo
- echo -e "================================================================================"
- echo -e "$COIN_NAME Masternode is up and running listening on port ${RED}$COIN_PORT${NC}."
+ echo -e "${BLUE}================================================================================================================================${NC}"
+ echo -e "${BLUE}================================================================================================================================${NC}"
+ echo -e "$COIN_NAME Masternode is up and running listening on port ${GREEN}$COIN_PORT${NC}."
  echo -e "Configuration file is: ${RED}$CONFIGFOLDER/$CONFIG_FILE${NC}"
- if (( $UBUNTU_VERSION == 16 || $UBUNTU_VERSION == 18 )); then
-   echo -e "Start: ${RED}systemctl start $COIN_NAME.service${NC}"
-   echo -e "Stop: ${RED}systemctl stop $COIN_NAME.service${NC}"
-   echo -e "Status: ${RED}systemctl status $COIN_NAME.service${NC}"
- else
-   echo -e "Start: ${RED}/etc/init.d/$COIN_NAME start${NC}"
-   echo -e "Stop: ${RED}/etc/init.d/$COIN_NAME stop${NC}"
-   echo -e "Status: ${RED}/etc/init.d/$COIN_NAME status${NC}"
- fi
- echo -e "VPS_IP:PORT ${RED}$NODEIP:$COIN_PORT${NC}"
- echo -e "MASTERNODE PRIVATEKEY is: ${RED}$COINKEY${NC}"
+ echo -e "Start: ${RED}systemctl start $COIN_NAME.service${NC}"
+ echo -e "Stop: ${RED}systemctl stop $COIN_NAME.service${NC}"
+ echo -e "Check Status: ${RED}systemctl status $COIN_NAME.service${NC}"
+ echo -e "VPS_IP:PORT ${GREEN}$NODEIP:$COIN_PORT${NC}"
+ echo -e "MASTERNODE GENKEY is: ${RED}$COINKEY${NC}"
  echo -e "Check ${RED}$COIN_CLI getblockcount${NC} and compare to ${GREEN}$COIN_EXPLORER${NC}."
+ echo -e "Check ${GREEN}Collateral${NC} already full confirmed and start masternode."
+ echo -e "Use ${RED}$COIN_CLI masternode status${NC} to check your MN Status."
+ echo -e "Use ${RED}$COIN_CLI help${NC} for help."
  if [[ -n $SENTINEL_REPO  ]]; then
-  echo -e "${RED}Sentinel${NC} is installed in ${RED}$CONFIGFOLDER/sentinel${NC}"
-  echo -e "Sentinel logs is: ${RED}$CONFIGFOLDER/sentinel.log${NC}"
+ echo -e "${RED}Sentinel${NC} is installed in ${RED}/root/sentinel_$COIN_NAME${NC}"
+ echo -e "Sentinel logs is: ${RED}$CONFIGFOLDER/sentinel.log${NC}"
  fi
- echo -e "Check if $COIN_NAME is running by using the following command:\n${RED}ps -ef | grep $COIN_DAEMON | grep -v grep${NC}"
- echo -e "================================================================================"
 }
 
 function setup_node() {
@@ -315,19 +280,17 @@ function setup_node() {
   create_key
   update_config
   enable_firewall
+  install_sentinel
   important_information
-  if (( $UBUNTU_VERSION == 16 || $UBUNTU_VERSION == 18 )); then
-    configure_systemd
-  else
-    configure_startup
-  fi    
+  configure_systemd
 }
 
 
 ##### Main #####
 clear
 
+purgeOldInstallation
 checks
 prepare_system
-compile_node
+download_node
 setup_node

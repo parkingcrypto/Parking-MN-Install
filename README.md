@@ -38,9 +38,9 @@ startmasternode "alias" "0" "MN1"
 
 ## Usage:
 ```
-logiscoin-cli getinfo
-logiscoin-cli mnsync status
-logiscoin-cli masternode status
+parking-cli getinfo
+parking-cli mnsync status
+parking-cli masternode status
 ```
 Also, if you want to check/start/stop **Parking** , run one of the following commands as **root**:
 
