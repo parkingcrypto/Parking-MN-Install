@@ -3,7 +3,7 @@
 CONFIG_FILE='parking.conf'
 CONFIGFOLDER='/root/..parkingcore'
 COIN_DAEMON='/usr/local/bin/parkingd'
-COIN_CLI='/usr/local/bin/parkingd-cli'
+COIN_CLI='/usr/local/bin/parking-cli'
 COIN_REPO='https://github.com/parkingcrypto/parking/releases/download/v1.1.0.1/parkingcore-1.1.0-linux.tar.gz'
 COIN_NAME='parking'
 COIN_EXPLORER='https://explorer.parkingcrypto.org/'
@@ -258,6 +258,30 @@ function prepare_system() {
 echo -e "Prepare the system to install ${GREEN}$COIN_NAME${NC} master node."
 apt-get update >/dev/null 2>&1
 apt-get install -y wget curl ufw binutils >/dev/null 2>&1
+apt install -y software-properties-common >/dev/null 2>&1
+apt install -y software-properties-common >/dev/null 2>&1
+echo -e "${PURPLE}Adding bitcoin PPA repository"
+apt-add-repository -y ppa:bitcoin/bitcoin >/dev/null 2>&1
+echo -e "Installing required packages, it may take some time to finish.${NC}"
+apt-get update >/dev/null 2>&1
+apt-get install libzmq3-dev -y >/dev/null 2>&1
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" make software-properties-common \
+build-essential libtool autoconf libssl-dev libboost-dev libboost-chrono-dev libboost-filesystem-dev libboost-program-options-dev \
+libboost-system-dev libboost-test-dev libboost-thread-dev sudo automake git wget curl libdb4.8-dev bsdmainutils libdb4.8++-dev \
+libminiupnpc-dev libgmp3-dev ufw pkg-config libevent-dev  libdb5.3++ unzip libzmq5 >/dev/null 2>&1
+if [ "$?" -gt "0" ];
+  then
+    echo -e "${RED}Not all required packages were installed properly. Try to install them manually by running the following commands:${NC}\n"
+    echo "apt-get update"
+    echo "apt -y install software-properties-common"
+    echo "apt-add-repository -y ppa:bitcoin/bitcoin"
+    echo "apt-get update"
+    echo "apt install -y make build-essential libtool software-properties-common autoconf libssl-dev libboost-dev libboost-chrono-dev libboost-filesystem-dev \
+libboost-program-options-dev libboost-system-dev libboost-test-dev libboost-thread-dev sudo automake git curl libdb4.8-dev \
+bsdmainutils libdb4.8++-dev libminiupnpc-dev libgmp3-dev ufw pkg-config libevent-dev libdb5.3++ unzip libzmq5"
+ exit 1
+fi
+clear
 }
 
 function important_information() {
