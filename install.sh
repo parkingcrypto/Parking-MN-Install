@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CONFIG_FILE='parking.conf'
-CONFIGFOLDER='/root/..parkingcore'
+CONFIGFOLDER='/root/.parkingcore'
 COIN_DAEMON='/usr/local/bin/parkingd'
 COIN_CLI='/usr/local/bin/parking-cli'
 COIN_REPO='https://github.com/parkingcrypto/parking/releases/download/v1.1.0.1/parkingcore-1.1.0-linux.tar.gz'
